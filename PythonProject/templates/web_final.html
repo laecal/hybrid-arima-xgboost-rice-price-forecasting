@@ -383,34 +383,39 @@ buildMacroFields();
 // Clear inputs
 $('clearBtn').addEventListener('click',()=>{
 
+  // Clear uploaded files
   $('price_file').value = '';
   $('macro_file').value = '';
 
-  // Clear sample datasets
-  samplePriceFile = null;
-  sampleMacroFile = null;
-
-  $('priceStatus').innerText =
-    "No sample dataset selected.";
-
-  $('macroStatus').innerText =
-    "No sample dataset selected.";
-
-  $('priceStatus').classList.remove('sample-selected');
-  $('macroStatus').classList.remove('sample-selected');
-
+  // Reset forecast settings
   stepsInput.value = 3;
   applyMode.value = 'auto-repeat';
-
   buildMacroFields();
 
+  // Hide forecast results
   $('result').style.display = 'none';
 
-  if(forecastChart)
-    forecastChart.destroy();
+  // Hide DM & HLN test results
+  $('dmTestBox').style.display = 'none';
 
-  if(data.dm_test){
-    data.dm_test.destroy();
+  // Clear DM & HLN values
+  $('dm_stat').innerText = '-';
+  $('dm_p').innerText = '-';
+  $('hln_stat').innerText = '-';
+  $('hln_p').innerText = '-';
+
+  // Clear DM interpretation message
+  $('dm_message').innerText = '-';
+
+  // Reset DM message styling
+  $('dm_message').className = '';
+
+  // Destroy existing chart
+  if(forecastChart) {
+    forecastChart.destroy();
+    forecastChart = null;
+  }
+
 });
 
 // Generate forecast
