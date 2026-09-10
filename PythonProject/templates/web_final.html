@@ -100,6 +100,36 @@
   .dm-warning { background:#fff9e6; color:#b9770e; border-left:5px solid #f1c40f; }
   .dm-danger  { background:#fdecea; color:#922b21; border-left:5px solid #e74c3c; }
   .dm-neutral { background:#f4f6f7; color:#566573; border-left:5px solid #95a5a6; }
+
+.file-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.file-row .file-input {
+  flex: 1;
+}
+
+.sample-btn {
+  padding: 10px 14px;
+  background: #637d36;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.sample-btn:hover {
+  opacity: 0.9;
+}
+
+.sample-selected {
+  color: #1e8449;
+  font-weight: 600;
+}
 </style>
 
 </head>
@@ -113,13 +143,33 @@
 <div class="card">
   <h1>Enter Forecast Parameters</h1>
 
-  <label for="price_file">Upload Farmgate Price CSV (historical)</label>
+  
+<label>Upload Farmgate Price CSV (historical)</label>
+<div class="file-row">
   <input id="price_file" type="file" accept=".csv" class="file-input" />
+  <button type="button" class="sample-btn" id="samplePriceBtn">
+    Use Sample Data
+  </button>
+</div>
+<div class="micro" id="priceStatus">
+  No sample dataset selected.
+</div>
 
-  <label for="macro_file">Upload Macro CSV (optional)</label>
+<label>Upload Macro CSV (optional)</label>
+<div class="file-row">
   <input id="macro_file" type="file" accept=".csv" class="file-input" />
-  <div class="micro">Optional macro CSV for inflation/GDP — backend uses this if available.</div>
+  <button type="button" class="sample-btn" id="sampleMacroBtn">
+    Use Sample Data
+  </button>
+</div>
+<div class="micro" id="macroStatus">
+  No sample dataset selected.
+</div>
+<div class="micro">
+  You may upload your own CSV files or use the sample datasets provided by the simulator.
+</div>
 
+  
   <div class="row">
     <div class="col">
       <label for="steps">Forecast Horizon (months ahead)</label>
@@ -204,6 +254,98 @@ const macroFields = $('macro-fields');
 const applyMode = $('apply_mode');
 let forecastChart = null;
 
+// ================================
+// SAMPLE DATA
+// ================================
+
+const SAMPLE_PRICE_DATASET =
+  "/dataset/final-interpolated-farmgate-price.csv";
+
+const SAMPLE_MACRO_DATASET =
+  "/dataset/combined-gdp-inflation.csv";
+
+let samplePriceFile = null;
+let sampleMacroFile = null;
+
+
+// Create a File object from a dataset stored in the project
+async function loadSampleFile(url, filename) {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Unable to load sample dataset: ${filename}`);
+  }
+
+  const blob = await response.blob();
+
+  return new File(
+    [blob],
+    filename,
+    { type: "text/csv" }
+  );
+}
+
+// Use sample farmgate price dataset
+$('samplePriceBtn').addEventListener('click', async () => {
+
+  try {
+
+    samplePriceFile = await loadSampleFile(
+      SAMPLE_PRICE_DATASET,
+      "final-interpolated-farmgate-price.csv"
+    );
+
+    $('priceStatus').innerText =
+      "✓ Sample farmgate price dataset selected.";
+
+    $('priceStatus').classList.add('sample-selected');
+
+    // Clear manually uploaded file
+    $('price_file').value = '';
+
+  } catch (error) {
+
+    console.error(error);
+
+    alert(
+      "Unable to load the sample farmgate price dataset."
+    );
+
+  }
+
+});
+
+
+// Use sample macro dataset
+$('sampleMacroBtn').addEventListener('click', async () => {
+
+  try {
+
+    sampleMacroFile = await loadSampleFile(
+      SAMPLE_MACRO_DATASET,
+      "combined-gdp-inflation.csv"
+    );
+
+    $('macroStatus').innerText =
+      "✓ Sample macroeconomic dataset selected.";
+
+    $('macroStatus').classList.add('sample-selected');
+
+    // Clear manually uploaded file
+    $('macro_file').value = '';
+
+  } catch (error) {
+
+    console.error(error);
+
+    alert(
+      "Unable to load the sample macroeconomic dataset."
+    );
+
+  }
+
+});
+
 // Build macro fields dynamically
 function buildMacroFields() {
   const steps = Math.max(1, Math.min(12, parseInt(stepsInput.value)||1));
@@ -241,25 +383,74 @@ buildMacroFields();
 
 // Clear inputs
 $('clearBtn').addEventListener('click',()=>{
-  $('price_file').value=''; $('macro_file').value='';
-  stepsInput.value=3; applyMode.value='auto-repeat'; buildMacroFields();
-  $('result').style.display='none';
-  if(forecastChart) forecastChart.destroy();
+
+  $('price_file').value = '';
+  $('macro_file').value = '';
+
+  // Clear sample datasets
+  samplePriceFile = null;
+  sampleMacroFile = null;
+
+  $('priceStatus').innerText =
+    "No sample dataset selected.";
+
+  $('macroStatus').innerText =
+    "No sample dataset selected.";
+
+  $('priceStatus').classList.remove('sample-selected');
+  $('macroStatus').classList.remove('sample-selected');
+
+  stepsInput.value = 3;
+  applyMode.value = 'auto-repeat';
+
+  buildMacroFields();
+
+  $('result').style.display = 'none';
+
+  if(forecastChart)
+    forecastChart.destroy();
+
 });
 
 // Generate forecast
 $('generateBtn').addEventListener('click', async ()=>{
-  const priceFile = $('price_file').files[0];
-  if(!priceFile) {
-    alert("Please upload the historical Farmgate Price CSV first.");
-    return;
-  }
+  // Get manually uploaded file
+let priceFile = $('price_file').files[0];
 
-  const formData = new FormData();
-  formData.append('csv_file',$('price_file').files[0]||'');
-  if($('macro_file').files[0]) formData.append('macro_csv',$('macro_file').files[0]);
-  formData.append('steps',stepsInput.value);
+// If no manual file was selected, use sample dataset
+if (!priceFile && samplePriceFile) {
+  priceFile = samplePriceFile;
+}
 
+// Require a price dataset
+if (!priceFile) {
+  alert(
+    "Please upload the historical Farmgate Price CSV or click 'Use Sample Data'."
+  );
+  return;
+}
+
+const formData = new FormData();
+
+// Send farmgate price dataset
+formData.append('csv_file', priceFile);
+
+
+// Macro CSV
+let macroFile = $('macro_file').files[0];
+
+// If no manual macro file was selected, use sample dataset
+if (!macroFile && sampleMacroFile) {
+  macroFile = sampleMacroFile;
+}
+
+if (macroFile) {
+  formData.append('macro_csv', macroFile);
+}
+
+formData.append('steps', stepsInput.value);
+
+  
   if(applyMode.value==='auto-repeat'){
     formData.append('inflation',$('inflation').value||0);
     formData.append('gdp',$('gdp').value||0);
