@@ -1,18 +1,32 @@
 HYBRID ARIMA-XGBOOST FOR FARMGATE RICE CROP PRICE FORECASTING WEB SIMULATOR
+
 Version 1.0
+
 	
 Prepared by:
+
 Leahlyn Calacasan
+
 Nina Rosalinda Arlos
+
 Jhona Shane Hosillos
+
 Shane Nadynn Noblezada
 
+
+
 BSCS 4-B
+
 College of Computing and Informatics
+
 Iloilo Science and Technology University
+
 Lapaz, Iloilo City
 
+
+
 July 2026
+
 
 	
 1. SYSTEM OVERVIEW
