@@ -409,6 +409,8 @@ $('clearBtn').addEventListener('click',()=>{
   if(forecastChart)
     forecastChart.destroy();
 
+  if(data.dm_test){
+    data.dm_test.destroy();
 });
 
 // Generate forecast
