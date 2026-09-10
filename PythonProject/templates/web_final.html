@@ -1,0 +1,359 @@
+<!--frontend-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hybrid ARIMA–XGBoost Forecast Simulator</title>
+<style>
+  body {
+    font-family: Inter, Arial, sans-serif;
+    /* 1. Add your image URL here */
+    background: url("/static/image4.jpg");
+    background-size: cover;
+    margin: 0;
+    padding: 0;
+    /* Optional: fallback color if image fails */
+    background-color: #637d36;
+  }
+
+  .card {
+    /* 2. Changed background to slightly transparent white for a glass effect */
+    background: rgba(255, 255, 255, 0.98);
+    max-width: 1000px;
+    margin: 40px auto; /* Increased margin for better visual balance */
+    border-radius: 10px;
+    /* 3. Strengthened shadow to make card 'lift' off the background image */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    padding: 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Keep the rest of your code as is */
+  .header, .footer {
+    width: 100%;
+    text-align: center;
+    color: white;
+    box-sizing: border-box;
+  }
+  .header {
+  padding: 20px;
+  text-align: center;
+  color: white;
+  font-size: 24px;
+  font-weight: 600;
+
+  background: url("/static/image6.jpg"); /* your image */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  }
+  .header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5); /* overlay */
+  z-index: 0;
+  }
+  .header h2,
+  .header h1 {
+  position: relative;
+  z-index: 1;
+  }
+
+  .footer { padding: 14px 28px; font-size: 14px; margin-top: 40px; background: #637d36; }
+  h1 { margin-top: 0; font-size: 20px; }
+  label { display: block; margin: 10px 0 4px; font-weight: 600; }
+  input[type="number"], select, .file-input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #d6dce6;
+    box-sizing: border-box;
+  }
+  .row { display: flex; gap: 12px; }
+  .col { flex: 1; }
+  .btn {
+    padding: 12px 20px;
+    background: #2980b9;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-right: 10px;
+  }
+  .micro { font-size: 13px; color: #666; margin-top: 4px; }
+  #macro-fields { margin-top: 12px; padding: 8px; border-radius: 6px; border: 1px dashed #e3e9f1; background: #fbfdff; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td { padding: 8px 6px; border-bottom: 1px solid #eef2f6; text-align: left; }
+  .result-box { margin-top: 18px; padding: 12px; border-left: 5px solid #2d9bd8; background: #f6fbff; border-radius: 6px; }
+  canvas { margin-top: 25px; width: 100%; }
+
+  .dm-success { background:#eafaf1; color:#1e8449; border-left:5px solid #27ae60; }
+  .dm-warning { background:#fff9e6; color:#b9770e; border-left:5px solid #f1c40f; }
+  .dm-danger  { background:#fdecea; color:#922b21; border-left:5px solid #e74c3c; }
+  .dm-neutral { background:#f4f6f7; color:#566573; border-left:5px solid #95a5a6; }
+</style>
+
+</head>
+<body>
+
+<div class="header">
+    <h2>Hybrid ARIMA–XGBoost Forecast Simulator</h2>
+    <h1>For Farmgate Rice Crop Price in the Philippines </h1>
+</div>
+
+<div class="card">
+  <h1>Enter Forecast Parameters</h1>
+
+  <label for="price_file">Upload Farmgate Price CSV (historical)</label>
+  <input id="price_file" type="file" accept=".csv" class="file-input" />
+
+  <label for="macro_file">Upload Macro CSV (optional)</label>
+  <input id="macro_file" type="file" accept=".csv" class="file-input" />
+  <div class="micro">Optional macro CSV for inflation/GDP — backend uses this if available.</div>
+
+  <div class="row">
+    <div class="col">
+      <label for="steps">Forecast Horizon (months ahead)</label>
+      <input id="steps" type="number" min="1" max="12" value="3" />
+    </div>
+    <div class="col">
+      <label for="apply_mode">Apply same macro values to all months?</label>
+      <select id="apply_mode">
+        <option value="auto-repeat">Yes — repeat single value</option>
+        <option value="per-month">No — enter per-month values</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="macro-fields" aria-live="polite"></div>
+
+  <div class="row" style="margin-top:12px;">
+    <button class="btn" id="generateBtn">Generate Forecast</button>
+    <button class="btn" id="clearBtn">Clear</button>
+  </div>
+
+  <div class="result-box" id="result" style="display:none;">
+    <h3>Forecast Results</h3>
+    <div id="results_table"></div>
+    <canvas id="chart"></canvas>
+    <div id="errorMetricsTable" style="display:none;">
+      <h4>Error Metrics (only if actuals provided)</h4>
+      <table>
+        <thead>
+          <tr><th>Metric</th><th>ARIMA</th><th>Hybrid</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>RMSE</td><td id="rmse_arima">-</td><td id="rmse_hybrid">-</td></tr>
+          <tr><td>MAPE</td><td id="mape_arima">-</td><td id="mape_hybrid">-</td></tr>
+          <tr><td>MAE</td><td id="mae_arima">-</td><td id="mae_hybrid">-</td></tr>
+          <tr><td>MPE</td><td id="mpe_arima">-</td><td id="mpe_hybrid">-</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="dmTestBox" class="result-box" style="display:none; margin-top:15px;">
+      <h4>Statistical Significance Test (DM & HLN)</h4>
+
+      <table>
+        <tr><td><strong>DM Statistic</strong></td><td id="dm_stat">-</td></tr>
+        <tr><td><strong>DM p-value</strong></td><td id="dm_p">-</td></tr>
+        <tr><td><strong>HLN Statistic</strong></td><td id="hln_stat">-</td></tr>
+        <tr><td><strong>HLN p-value</strong></td><td id="hln_p">-</td></tr>
+      </table>
+
+      <div id="dm_message" style="
+        margin-top:10px;
+        padding:12px;
+        border-radius:6px;
+        font-weight:600;
+      ">
+        -
+      </div>
+    </div>
+
+  <div class="micro">
+    Notes: Optional actual values can compute metrics.
+  </div>
+</div>
+
+
+<div class="footer">© 2025 Hybrid ARIMA–XGBoost Forecasting UI — Research Prototype</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const createEl = (tag, html='', attrs={}) => {
+  const el = document.createElement(tag);
+  el.innerHTML = html;
+  Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));
+  return el;
+};
+
+const stepsInput = $('steps');
+const macroFields = $('macro-fields');
+const applyMode = $('apply_mode');
+let forecastChart = null;
+
+// Build macro fields dynamically
+function buildMacroFields() {
+  const steps = Math.max(1, Math.min(12, parseInt(stepsInput.value)||1));
+  const mode = applyMode.value;
+  macroFields.innerHTML = '';
+
+  if(mode==='auto-repeat') {
+    macroFields.appendChild(createEl('label','Inflation for future months (%)'));
+    macroFields.appendChild(createEl('input','',{type:'number', step:'any', id:'inflation'}));
+
+    macroFields.appendChild(createEl('label','GDP growth for future months (%)'));
+    macroFields.appendChild(createEl('input','',{type:'number', step:'any', id:'gdp'}));
+    macroFields.appendChild(createEl('div','<div class="micro">These values will be repeated for each forecast month</div>'));
+  } else {
+    const tbl = createEl('table');
+    tbl.innerHTML = `<thead><tr><th>Month</th><th>Inflation (%)</th><th>GDP (%)</th><th>Actual Price (optional)</th></tr></thead>`;
+    const tbody = createEl('tbody');
+    for(let i=1;i<=steps;i++){
+      tbody.innerHTML += `<tr>
+        <td>Month ${i}</td>
+        <td><input type="number" step="0.01" id="inflation_${i}"/></td>
+        <td><input type="number" step="0.01" id="gdp_${i}"/></td>
+        <td><input type="number" step="0.01" id="actual_${i}"/></td>
+      </tr>`;
+    }
+    tbl.appendChild(tbody);
+    macroFields.appendChild(tbl);
+    macroFields.appendChild(createEl('div','<div class="micro">Enter per-month macro assumptions and optional actual prices.</div>'));
+  }
+}
+
+stepsInput.addEventListener('change', buildMacroFields);
+applyMode.addEventListener('change', buildMacroFields);
+buildMacroFields();
+
+// Clear inputs
+$('clearBtn').addEventListener('click',()=>{
+  $('price_file').value=''; $('macro_file').value='';
+  stepsInput.value=3; applyMode.value='auto-repeat'; buildMacroFields();
+  $('result').style.display='none';
+  if(forecastChart) forecastChart.destroy();
+});
+
+// Generate forecast
+$('generateBtn').addEventListener('click', async ()=>{
+  const priceFile = $('price_file').files[0];
+  if(!priceFile) {
+    alert("Please upload the historical Farmgate Price CSV first.");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('csv_file',$('price_file').files[0]||'');
+  if($('macro_file').files[0]) formData.append('macro_csv',$('macro_file').files[0]);
+  formData.append('steps',stepsInput.value);
+
+  if(applyMode.value==='auto-repeat'){
+    formData.append('inflation',$('inflation').value||0);
+    formData.append('gdp',$('gdp').value||0);
+  } else {
+    const steps = parseInt(stepsInput.value);
+    for(let i=1;i<=steps;i++){
+      formData.append(`inflation_${i}`, $(`inflation_${i}`).value||0);
+      formData.append(`gdp_${i}`, $(`gdp_${i}`).value||0);
+      formData.append(`actual_${i}`, $(`actual_${i}`).value||'');
+    }
+  }
+
+  try{
+    const res = await fetch('/forecast', {method:'POST', body:formData});
+    const data = await res.json();
+    if(data.error){ alert(data.error); return; }
+
+    // Build table
+    let tableHTML = '<table><thead><tr><th>Month</th><th>ARIMA</th><th>Hybrid</th><th>Actual</th></tr></thead><tbody>';
+    data.labels.forEach((label,i)=>{
+      tableHTML+=`<tr>
+        <td>${label}</td>
+        <td>${data.arima[i]}</td>
+        <td>${data.hybrid[i]}</td>
+        <td>${data.actual[i]!==null?data.actual[i]:'-'}</td>
+      </tr>`;
+    });
+    tableHTML+='</tbody></table>';
+    $('results_table').innerHTML = tableHTML;
+
+    // Show chart
+    if(forecastChart) forecastChart.destroy();
+    const ctx = $('chart').getContext('2d');
+    forecastChart = new Chart(ctx,{
+      type:'line',
+      data:{
+        labels:data.labels,
+        datasets:[
+          {label:'ARIMA', data:data.arima, borderColor:'#f0ec07', fill:false},
+          {label:'Hybrid', data:data.hybrid, borderColor:'#a10505', fill:false},
+          {label:'Actual', data:data.actual.map(v=>v===null?null:v), borderColor:'#27ae60', fill:false}
+        ]
+      },
+      options:{responsive:true, interaction:{mode:'index', intersect:false}}
+    });
+
+    $('result').style.display='block';
+
+    // Error metrics
+    if(data.error_metrics){
+      $('rmse_arima').innerText = data.error_metrics.RMSE_ARIMA;
+      $('mape_arima').innerText = data.error_metrics.MAPE_ARIMA;
+      $('mae_arima').innerText = data.error_metrics.MAE_ARIMA;
+      $('mpe_arima').innerText = data.error_metrics.MPE_ARIMA; // Add MPE for ARIMA
+      $('rmse_hybrid').innerText = data.error_metrics.RMSE_HYBRID;
+      $('mape_hybrid').innerText = data.error_metrics.MAPE_HYBRID;
+      $('mae_hybrid').innerText = data.error_metrics.MAE_HYBRID;
+      $('mpe_hybrid').innerText = data.error_metrics.MPE_HYBRID; // Add MPE for Hybrid
+      $('errorMetricsTable').style.display='block';
+    } else {
+      $('errorMetricsTable').style.display='none';
+    }
+
+    // DM TEST DASHBOARD
+    if(data.dm_test){
+      $('dm_stat').innerText = data.dm_test.dm_stat;
+      $('dm_p').innerText = data.dm_test.p_value;
+      $('hln_stat').innerText = data.dm_test.hln_stat;
+      $('hln_p').innerText = data.dm_test.hln_p_value;
+
+      const msgBox = $('dm_message');
+      msgBox.innerText = data.dm_test.icon + " " + data.dm_test.interpretation;
+
+      // Reset classes
+      msgBox.className = '';
+
+      // Apply color based on status
+      if(data.dm_test.status === 'success'){
+        msgBox.classList.add('dm-success');
+      } else if(data.dm_test.status === 'warning'){
+        msgBox.classList.add('dm-warning');
+      } else if(data.dm_test.status === 'danger'){
+        msgBox.classList.add('dm-danger');
+      } else {
+        msgBox.classList.add('dm-neutral');
+      }
+
+      $('dmTestBox').style.display = 'block';
+    } else {
+      $('dmTestBox').style.display = 'none';
+    }
+
+  }catch(err){ console.error(err); alert('Forecast failed.'); }
+});
+</script>
+</body>
+</html>
